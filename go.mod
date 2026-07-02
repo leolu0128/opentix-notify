@@ -1,6 +1,6 @@
 module gocrawler
 
-go 1.26.1
+go 1.23
 
 require (
 	github.com/stretchr/testify v1.11.1
