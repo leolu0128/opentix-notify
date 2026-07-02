@@ -1,0 +1,9 @@
+# 複製為 config.yaml 後填入實際值;secrets 建議改用環境變數
+keywords:
+  - 交響
+  - 鋼琴
+cron: "0 * * * *"          # 每小時整點
+opentix_url: "https://www.opentix.life"   # Task 7 驗證實際 API endpoint 後更新
+database_url: "postgres://gocrawler:gocrawler@localhost:5432/gocrawler?sslmode=disable"
+redis_addr: "localhost:6379"
+discord_webhook_url: ""     # 一律用環境變數 DISCORD_WEBHOOK_URL 提供,不要寫進檔案
