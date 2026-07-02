@@ -22,3 +22,6 @@ coverage.*
 
 # Go
 vendor/
+
+# 本地設定(含機密)
+config.yaml
