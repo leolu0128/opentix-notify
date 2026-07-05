@@ -18,6 +18,9 @@ func TestMatch(t *testing.T) {
 		{"未命中", []string{"歌劇"}, "鋼琴獨奏會", false},
 		{"空關鍵字清單不命中", []string{}, "任何節目", false},
 		{"nil 關鍵字清單不命中", nil, "任何節目", false},
+		{"空字串關鍵字不命中", []string{""}, "任何節目", false},
+		{"大寫關鍵字命中小寫標題", []string{"NSO"}, "nso 音樂會", true},
+		{"空標題不命中", []string{"歌劇"}, "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
