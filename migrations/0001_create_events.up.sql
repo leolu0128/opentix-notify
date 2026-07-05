@@ -1,3 +1,4 @@
+-- title 的 ILIKE 過濾目前靠 seq scan;資料量大時可加 pg_trgm GIN 索引
 CREATE TABLE events (
     id              BIGSERIAL PRIMARY KEY,
     source          TEXT        NOT NULL,
