@@ -38,8 +38,18 @@ func TestDo_ExhaustsAttempts(t *testing.T) {
 		calls++
 		return errors.New("boom")
 	})
-	require.Error(t, err)
+	require.EqualError(t, err, "boom")
 	require.Equal(t, 3, calls)
+}
+
+func TestDo_InvalidAttempts(t *testing.T) {
+	calls := 0
+	err := Do(context.Background(), 0, time.Millisecond, func() error {
+		calls++
+		return nil
+	})
+	require.Error(t, err)
+	require.Equal(t, 0, calls)
 }
 
 func TestDo_ContextCancelStops(t *testing.T) {
