@@ -20,6 +20,7 @@ func TestLoad_FromYAML(t *testing.T) {
 keywords: [交響, 鋼琴]
 cron: "0 * * * *"
 opentix_url: "https://example.com/api"
+opentix_categories: [音樂-管絃樂團, 音樂-獨奏]
 database_url: "postgres://u:p@localhost:5432/db"
 redis_addr: "localhost:6379"
 discord_webhook_url: "https://discord.com/api/webhooks/x"
@@ -29,6 +30,7 @@ discord_webhook_url: "https://discord.com/api/webhooks/x"
 	require.Equal(t, []string{"交響", "鋼琴"}, cfg.Keywords)
 	require.Equal(t, "0 * * * *", cfg.Cron)
 	require.Equal(t, "https://example.com/api", cfg.OpentixURL)
+	require.Equal(t, []string{"音樂-管絃樂團", "音樂-獨奏"}, cfg.OpentixCategories)
 }
 
 func TestLoad_EnvOverridesYAML(t *testing.T) {

@@ -1,0 +1,25 @@
+{
+  "requestId": "test-page2",
+  "result": {
+    "hitsCount": 3,
+    "found": [
+      {
+        "score": -1,
+        "source": {
+          "id": "1994031454646419457",
+          "title": "台新新光經典饗宴-NSO歌劇音樂會《女武神》",
+          "displayCategory": "音樂",
+          "eventVenues": [
+            {"city": "臺北", "name": "國家音樂廳", "times": [{"start": 1783674000000, "onlineStart": 1764820800000}]}
+          ],
+          "places": ["臺北"],
+          "categories": ["音樂-管絃樂團"]
+        },
+        "highlight": {}
+      }
+    ],
+    "suggest": [],
+    "nextOffset": 3
+  },
+  "error": null
+}

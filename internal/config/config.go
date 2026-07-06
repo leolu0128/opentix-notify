@@ -11,6 +11,7 @@ type Config struct {
 	Keywords          []string `yaml:"keywords"`
 	Cron              string   `yaml:"cron"`
 	OpentixURL        string   `yaml:"opentix_url"`
+	OpentixCategories []string `yaml:"opentix_categories"`
 	DatabaseURL       string   `yaml:"database_url"`
 	RedisAddr         string   `yaml:"redis_addr"`
 	DiscordWebhookURL string   `yaml:"discord_webhook_url"`
