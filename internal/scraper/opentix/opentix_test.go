@@ -108,6 +108,43 @@ func TestFetch_MalformedJSON(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestFetch_SkipsMalformedProgram(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// 第一筆 source 為 null,第二筆缺 id,第三筆正常 → 只回 1 筆,無 error
+		_, _ = w.Write([]byte(`{"result":{"hitsCount":3,"found":[
+			{"source":null},
+			{"source":{"title":"no id"}},
+			{"source":{"id":"ok-1","title":"正常節目"}}
+		],"nextOffset":3},"error":null}`))
+	}))
+	defer srv.Close()
+
+	s, err := New(srv.URL, testCategories)
+	require.NoError(t, err)
+	s.pageDelay = 0
+
+	events, err := s.Fetch(context.Background())
+	require.NoError(t, err, "單筆欄位漂移不應讓整輪失敗")
+	require.Len(t, events, 1)
+	require.Equal(t, "ok-1", events[0].SourceEventID)
+}
+
+func TestFetch_APIErrorEnvelope(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"result":{"hitsCount":0,"found":[],"nextOffset":0},"error":{"code":"X"}}`))
+	}))
+	defer srv.Close()
+
+	s, err := New(srv.URL, testCategories)
+	require.NoError(t, err)
+	s.pageDelay = 0
+
+	_, err = s.Fetch(context.Background())
+	require.Error(t, err)
+	require.Contains(t, err.Error(), `{"code":"X"}`)
+}
+
 func TestFetch_StuckNextOffsetStops(t *testing.T) {
 	calls := 0
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

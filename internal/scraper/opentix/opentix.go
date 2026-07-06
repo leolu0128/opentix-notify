@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -18,7 +19,9 @@ const (
 	userAgent = "gocrawler/1.0 (polite hourly crawler)"
 	sortBy    = "ABOUT_TO_BEGIN"
 	language  = "zh-CHT"
-	maxPages  = 40 // 40 頁 x 15 筆 = 600,現況全站音樂類約 488 筆
+	// maxPages 是分頁掃描的硬上限:40 頁 x 15 筆 = 600,現況全站音樂類約 488 筆。
+	// 注意:達到上限時尾端節目會被靜默截斷——目錄成長超過 600 筆時需調高。
+	maxPages = 40
 )
 
 // Source 是 OPENTIX 的 scraper.Source 實作。
@@ -61,6 +64,7 @@ type searchResponse struct {
 		} `json:"found"`
 		NextOffset int `json:"nextOffset"`
 	} `json:"result"`
+	Error json.RawMessage `json:"error"`
 }
 
 type programItem struct {
@@ -77,6 +81,7 @@ type programItem struct {
 
 // Fetch 以 offset 分頁掃描全部節目(最多 maxPages 頁,頁間停頓 pageDelay),
 // 每筆正規化為 model.Event。順序不影響正確性,去重由 pipeline 負責。
+// 單筆解析失敗(欄位漂移、缺 id)只記 warning 並跳過,不會讓整輪失敗。
 func (s *Source) Fetch(ctx context.Context) ([]model.Event, error) {
 	var events []model.Event
 	offset := 0
@@ -98,7 +103,8 @@ func (s *Source) Fetch(ctx context.Context) ([]model.Event, error) {
 		for _, f := range resp.Result.Found {
 			e, err := toEvent(f.Source)
 			if err != nil {
-				return nil, err
+				slog.Warn("opentix: skip malformed program", "err", err)
+				continue
 			}
 			events = append(events, e)
 		}
@@ -144,6 +150,9 @@ func (s *Source) fetchPage(ctx context.Context, offset int) (*searchResponse, er
 	var sr searchResponse
 	if err := json.Unmarshal(data, &sr); err != nil {
 		return nil, fmt.Errorf("opentix: parse offset %d: %w", offset, err)
+	}
+	if len(sr.Error) > 0 && string(sr.Error) != "null" {
+		return nil, fmt.Errorf("opentix: api error at offset %d: %s", offset, string(sr.Error))
 	}
 	return &sr, nil
 }
