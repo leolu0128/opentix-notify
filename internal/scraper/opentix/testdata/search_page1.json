@@ -1,0 +1,56 @@
+{
+  "requestId": "test-page1",
+  "result": {
+    "hitsCount": 3,
+    "found": [
+      {
+        "score": -1,
+        "source": {
+          "id": "2043631234892812288",
+          "title": "2026蔚藍之聲~土地之愛",
+          "displayCategory": "音樂",
+          "imageUrl": "https://s3.resource.opentix.life/upload/program/1776150161508dzSrPZP4rF.jpeg",
+          "startDateTime": 1783337400000,
+          "endDateTime": 1783344600000,
+          "onlineStartDateTime": 1779076800000,
+          "onlineEndDateTime": 1783341000000,
+          "minPrice": 500,
+          "maxPrice": 500,
+          "eventVenues": [
+            {
+              "city": "臺北",
+              "name": "國家兩廳院演奏廳",
+              "times": [
+                {"start": 1783337400000, "end": 1783344600000, "onlineStart": 1779076800000, "onlineEnd": 1783341000000, "minPrice": 500, "maxPrice": 500}
+              ]
+            }
+          ],
+          "places": ["臺北"],
+          "categories": ["音樂-合唱"]
+        },
+        "highlight": {}
+      },
+      {
+        "score": -1,
+        "source": {
+          "id": "2047565726185103361",
+          "title": "子午線上的低音",
+          "displayCategory": "音樂",
+          "startDateTime": 1783423800000,
+          "endDateTime": 1784553600000,
+          "onlineStartDateTime": 1777608000000,
+          "eventVenues": [
+            {"city": "高雄", "name": "衛武營國家藝術文化中心表演廳", "times": [{"start": 1783423800000, "onlineStart": 1777608000000}]},
+            {"city": "臺中", "name": "臺中國家歌劇院小劇場", "times": [{"start": 1784547000000, "onlineStart": 1777608000000}]}
+          ],
+          "places": ["高雄", "臺中"],
+          "categories": ["音樂-室內樂"]
+        },
+        "highlight": {}
+      }
+    ],
+    "suggest": [],
+    "nextOffset": 2
+  },
+  "error": null
+}

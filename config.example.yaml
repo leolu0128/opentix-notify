@@ -3,7 +3,25 @@ keywords:
   - 交響
   - 鋼琴
 cron: "0 * * * *"          # 每小時整點
-opentix_url: "https://www.opentix.life"   # Task 7 驗證實際 API endpoint 後更新
+opentix_url: "https://search.opentix.life/search"   # OPENTIX search API(已於 2026-07-06 實測)
+opentix_categories:   # search API 的 categoryFilter,不可為空
+  - 音樂-管絃樂團
+  - 音樂-管樂團
+  - 音樂-絃樂團
+  - 音樂-室內樂
+  - 音樂-合唱
+  - 音樂-獨唱
+  - 音樂-獨奏
+  - 音樂-國樂
+  - 音樂-動漫/電影音樂會
+  - 音樂-歌劇
+  - 音樂-爵士樂
+  - 音樂-世界/民族
+  - 音樂-打擊樂
+  - 音樂-現代音樂
+  - 音樂-音樂劇場
+  - 音樂-流行音樂
+  - 音樂-其他音樂節目
 database_url: "postgres://gocrawler:gocrawler@localhost:5432/gocrawler?sslmode=disable"
 redis_addr: "localhost:6379"
 discord_webhook_url: ""     # 一律用環境變數 DISCORD_WEBHOOK_URL 提供,不要寫進檔案
