@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 
@@ -20,11 +21,15 @@ func newTestStore(t *testing.T) *PostgresStore {
 	}
 	store, err := NewPostgresStore(url)
 	require.NoError(t, err)
+	// TODO(Task 13): 改用 storage.Migrate 套用真實 migrations,避免 schema 漂移
 	_, err = store.db.Exec(`CREATE TABLE IF NOT EXISTS events (
 		id BIGSERIAL PRIMARY KEY, source TEXT NOT NULL, source_event_id TEXT NOT NULL,
 		title TEXT NOT NULL, url TEXT NOT NULL, venue TEXT NOT NULL DEFAULT '',
 		start_time TIMESTAMPTZ, on_sale_time TIMESTAMPTZ, raw JSONB,
 		created_at TIMESTAMPTZ NOT NULL DEFAULT now(), UNIQUE (source, source_event_id))`)
+	require.NoError(t, err)
+	// 防前次 crash 殘留造成誤判:setup 時先清掉 test 來源的舊資料
+	_, err = store.db.Exec(`DELETE FROM events WHERE source = 'test'`)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		_, _ = store.db.Exec(`DELETE FROM events WHERE source = 'test'`)
@@ -45,6 +50,15 @@ func TestInsertEvent_NewAndDuplicate(t *testing.T) {
 	inserted, err = store.InsertEvent(ctx, e)
 	require.NoError(t, err)
 	require.False(t, inserted, "duplicate insert should report not inserted")
+
+	// 覆蓋 nullableRaw 非空分支與 JSONB 驅動層行為
+	withRaw := model.Event{
+		Source: "test", SourceEventID: "e2", Title: "含原始資料", URL: "https://x/2",
+		Raw: json.RawMessage(`{"k":"v"}`),
+	}
+	inserted, err = store.InsertEvent(ctx, withRaw)
+	require.NoError(t, err)
+	require.True(t, inserted, "insert with raw JSONB should report inserted")
 }
 
 func TestListEvents_FilterAndPagination(t *testing.T) {
@@ -66,6 +80,14 @@ func TestListEvents_FilterAndPagination(t *testing.T) {
 	got, err = store.ListEvents(ctx, "", "test", 2, 0)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
+	// ORDER BY id DESC:無 offset 時第一筆是最後插入的 l3
+	require.Equal(t, "l3", got[0].SourceEventID)
+
+	// offset=1 跳過 l3,第一筆應為 l2
+	got, err = store.ListEvents(ctx, "", "test", 2, 1)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	require.Equal(t, "l2", got[0].SourceEventID)
 }
 
 func TestGetEvent(t *testing.T) {

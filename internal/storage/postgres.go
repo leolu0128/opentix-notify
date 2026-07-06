@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
@@ -25,12 +26,17 @@ func NewPostgresStore(databaseURL string) (*PostgresStore, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open postgres: %w", err)
 	}
-	if err := db.Ping(); err != nil {
+	db.SetMaxOpenConns(10)
+	db.SetConnMaxLifetime(30 * time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := db.PingContext(ctx); err != nil {
 		return nil, fmt.Errorf("ping postgres: %w", err)
 	}
 	return &PostgresStore{db: db}, nil
 }
 
+// Close 關閉連線池;應在程式結束前呼叫一次。
 func (s *PostgresStore) Close() error { return s.db.Close() }
 
 // InsertEvent 寫入節目;(source, source_event_id) 已存在時不寫入並回傳 false。
@@ -62,6 +68,7 @@ func nullableRaw(raw []byte) any {
 }
 
 // ListEvents 依標題關鍵字(ILIKE)與來源過濾,新的在前,分頁回傳。
+// 不回填 Raw 欄位。
 func (s *PostgresStore) ListEvents(ctx context.Context, q, source string, limit, offset int) ([]model.Event, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT id, source, source_event_id, title, url, venue, start_time, on_sale_time, created_at
@@ -91,6 +98,7 @@ func (s *PostgresStore) ListEvents(ctx context.Context, q, source string, limit,
 }
 
 // GetEvent 以主鍵查詢單筆;查無回 ErrNotFound。
+// 不回填 Raw 欄位。
 func (s *PostgresStore) GetEvent(ctx context.Context, id int64) (*model.Event, error) {
 	var e model.Event
 	err := s.db.QueryRowContext(ctx, `
