@@ -12,7 +12,7 @@ import (
 )
 
 // 需要真實 Postgres:docker compose up -d postgres 後
-// $env:TEST_DATABASE_URL = "postgres://gocrawler:gocrawler@localhost:5432/gocrawler?sslmode=disable"
+// $env:TEST_DATABASE_URL = "postgres://gocrawler:gocrawler@localhost:15432/gocrawler?sslmode=disable"
 func newTestStore(t *testing.T) *PostgresStore {
 	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
