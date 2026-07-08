@@ -6,7 +6,8 @@ services:
       POSTGRES_PASSWORD: gocrawler
       POSTGRES_DB: gocrawler
     ports:
-      - "5432:5432"
+      # 15432:本機已有原生 PostgreSQL 佔用 5432,避免衝突
+      - "15432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
   redis:

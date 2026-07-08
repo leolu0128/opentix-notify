@@ -22,6 +22,6 @@ opentix_categories:   # search API 的 categoryFilter,不可為空
   - 音樂-音樂劇場
   - 音樂-流行音樂
   - 音樂-其他音樂節目
-database_url: "postgres://gocrawler:gocrawler@localhost:5432/gocrawler?sslmode=disable"
+database_url: "postgres://gocrawler:gocrawler@localhost:15432/gocrawler?sslmode=disable"   # 15432 見 docker-compose.yml 註解
 redis_addr: "localhost:6379"
 discord_webhook_url: ""     # 一律用環境變數 DISCORD_WEBHOOK_URL 提供,不要寫進檔案
