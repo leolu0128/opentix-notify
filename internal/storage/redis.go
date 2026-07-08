@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,12 +31,16 @@ func NewDeduper(addr string) (*Deduper, error) {
 // Close 關閉 Redis 連線。
 func (d *Deduper) Close() error { return d.client.Close() }
 
-// IsNew 用 SETNX 判斷 (source, eventID) 是否第一次出現。
+// IsNew 用 SET NX 判斷 (source, eventID) 是否第一次出現。
 func (d *Deduper) IsNew(ctx context.Context, source, eventID string) (bool, error) {
 	key := fmt.Sprintf("dedup:%s:%s", source, eventID)
-	ok, err := d.client.SetNX(ctx, key, 1, dedupTTL).Result()
-	if err != nil {
-		return false, fmt.Errorf("redis setnx: %w", err)
+	// SetArgs 的 NX 模式:key 已存在時回 redis.Nil,不算錯誤。
+	_, err := d.client.SetArgs(ctx, key, 1, redis.SetArgs{Mode: "NX", TTL: dedupTTL}).Result()
+	if errors.Is(err, redis.Nil) {
+		return false, nil
 	}
-	return ok, nil
+	if err != nil {
+		return false, fmt.Errorf("redis set nx: %w", err)
+	}
+	return true, nil
 }

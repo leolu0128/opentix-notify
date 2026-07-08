@@ -6,3 +6,4 @@ linters:
       # defer xxx.Close() 是 Go 慣用寫法;讀取用途的 Close 失敗無事可做
       exclude-functions:
         - (io.Closer).Close
+        - (*database/sql.Rows).Close
