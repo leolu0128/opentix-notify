@@ -44,3 +44,12 @@ func (d *Deduper) IsNew(ctx context.Context, source, eventID string) (bool, erro
 	}
 	return true, nil
 }
+
+// Forget 移除 (source, eventID) 的去重標記;insert 失敗時讓下一輪能重試。
+func (d *Deduper) Forget(ctx context.Context, source, eventID string) error {
+	key := fmt.Sprintf("dedup:%s:%s", source, eventID)
+	if err := d.client.Del(ctx, key).Err(); err != nil {
+		return fmt.Errorf("redis del: %w", err)
+	}
+	return nil
+}

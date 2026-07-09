@@ -25,6 +25,7 @@ type EventStore interface {
 
 type Deduper interface {
 	IsNew(ctx context.Context, source, eventID string) (bool, error)
+	Forget(ctx context.Context, source, eventID string) error
 }
 
 type Notifier interface {
@@ -40,19 +41,33 @@ type Pipeline struct {
 	Matcher  *matcher.Matcher
 	Notifier Notifier
 	Notify   bool // false = 只入庫不推播(初次 seed 用)
+	// BaseDelay 是 retry 指數退避的基準間隔;零值時用預設 2s(測試可縮短)。
+	BaseDelay time.Duration
 }
 
 const (
-	fetchAttempts  = 3
-	notifyAttempts = 3
-	baseDelay      = 2 * time.Second
+	fetchAttempts    = 3
+	notifyAttempts   = 3
+	defaultBaseDelay = 2 * time.Second
 )
 
+// baseDelay 回傳退避基準:有覆寫用覆寫,否則用預設。
+func (p *Pipeline) baseDelay() time.Duration {
+	if p.BaseDelay > 0 {
+		return p.BaseDelay
+	}
+	return defaultBaseDelay
+}
+
 // Run 對所有 Source 執行一輪 fetch→dedup→insert→match→notify。
-// 任一 source 失敗會記入回傳錯誤,但不影響其他 source。
+// 任一 source 失敗會記入回傳錯誤,但不影響其他 source;
+// context 取消時立即停止並回傳 ctx.Err()。
 func (p *Pipeline) Run(ctx context.Context) error {
 	var firstErr error
 	for _, src := range p.Sources {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		if err := p.runSource(ctx, src); err != nil {
 			slog.Error("source run failed", "source", src.Name(), "err", err)
 			if firstErr == nil {
@@ -64,8 +79,9 @@ func (p *Pipeline) Run(ctx context.Context) error {
 }
 
 func (p *Pipeline) runSource(ctx context.Context, src Source) error {
+	start := time.Now()
 	var events []model.Event
-	err := retry.Do(ctx, fetchAttempts, baseDelay, func() error {
+	err := retry.Do(ctx, fetchAttempts, p.baseDelay(), func() error {
 		var ferr error
 		events, ferr = src.Fetch(ctx)
 		return ferr
@@ -75,11 +91,21 @@ func (p *Pipeline) runSource(ctx context.Context, src Source) error {
 	}
 	slog.Info("fetched", "source", src.Name(), "count", len(events))
 
+	var newCount, notifiedCount, insertErrs, notifyErrs int
 	for _, e := range events {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+
 		// 第一線:Redis 快篩。Redis 故障時降級,交給 Postgres 判斷。
 		isNew, derr := p.Deduper.IsNew(ctx, e.Source, e.SourceEventID)
 		if derr != nil {
-			slog.Warn("deduper unavailable, falling back to postgres", "err", derr)
+			// ctx 取消不是「deduper unavailable」,直接停止這輪。
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			slog.Warn("deduper unavailable, falling back to postgres",
+				"source", e.Source, "event", e.SourceEventID, "err", derr)
 		} else if !isNew {
 			continue
 		}
@@ -87,24 +113,37 @@ func (p *Pipeline) runSource(ctx context.Context, src Source) error {
 		// 最終防線:UNIQUE 衝突 = 不是新節目,不通知。
 		inserted, ierr := p.Store.InsertEvent(ctx, e)
 		if ierr != nil {
-			slog.Error("insert failed", "event", e.SourceEventID, "err", ierr)
+			insertErrs++
+			slog.Error("insert failed", "source", e.Source, "event", e.SourceEventID, "err", ierr)
+			// best-effort 撤銷 Redis 標記,讓下一輪能重試這筆;失敗只 log(90 天 TTL 是最終保險)。
+			if ferr := p.Deduper.Forget(ctx, e.Source, e.SourceEventID); ferr != nil {
+				slog.Warn("dedup forget failed", "source", e.Source, "event", e.SourceEventID, "err", ferr)
+			}
 			continue
 		}
 		if !inserted {
 			continue
 		}
+		newCount++
 		slog.Info("new event stored", "source", e.Source, "title", e.Title)
 
 		if !p.Notify || !p.Matcher.Match(e.Title) {
 			continue
 		}
-		nerr := retry.Do(ctx, notifyAttempts, baseDelay, func() error {
+		nerr := retry.Do(ctx, notifyAttempts, p.baseDelay(), func() error {
 			return p.Notifier.Notify(ctx, e)
 		})
 		if nerr != nil {
+			notifyErrs++
 			// 節目已入庫不會遺失,漏一次通知只記 log。
-			slog.Error("notify failed", "title", e.Title, "err", nerr)
+			slog.Error("notify failed", "source", e.Source, "event", e.SourceEventID, "title", e.Title, "err", nerr)
+		} else {
+			notifiedCount++
 		}
 	}
+	slog.Info("source round done", "source", src.Name(), "fetched", len(events),
+		"new", newCount, "notified", notifiedCount,
+		"insert_errors", insertErrs, "notify_errors", notifyErrs,
+		"duration", time.Since(start).Round(time.Millisecond))
 	return nil
 }
