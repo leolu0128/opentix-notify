@@ -47,9 +47,18 @@ type fakeDeduper struct {
 	seen      map[string]bool
 	err       error
 	forgotten []string
+	// cancel 非 nil 時,第一次 IsNew 呼叫會觸發它並回傳 ctx.Err(),
+	// 用來模擬「dedup 呼叫途中 ctx 被取消」的情境。
+	cancel    context.CancelFunc
+	cancelled bool
 }
 
 func (f *fakeDeduper) IsNew(ctx context.Context, source, id string) (bool, error) {
+	if f.cancel != nil && !f.cancelled {
+		f.cancelled = true
+		f.cancel()
+		return false, ctx.Err()
+	}
 	if f.err != nil {
 		return false, f.err
 	}
@@ -218,6 +227,24 @@ func TestRun_ContextCancelledStopsRun(t *testing.T) {
 	require.ErrorIs(t, err, context.Canceled)
 	require.Empty(t, store.inserted, "取消後不應再打 store")
 	require.Empty(t, notif.notified, "取消後不應再打 notifier")
+}
+
+func TestRun_ContextCancelledMidLoopSkipsRemainingEvents(t *testing.T) {
+	src := &fakeSource{events: []model.Event{
+		{Source: "fake", SourceEventID: "1", Title: "交響音樂會"},
+		{Source: "fake", SourceEventID: "2", Title: "交響第九"},
+	}}
+	store := &fakeStore{existing: map[string]bool{}}
+	notif := &fakeNotifier{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	dedup := &fakeDeduper{seen: map[string]bool{}, cancel: cancel}
+
+	p := newPipeline(src, store, dedup, notif, []string{"交響"}, true)
+	err := p.Run(ctx)
+	require.ErrorIs(t, err, context.Canceled)
+	require.Empty(t, store.inserted, "第一筆在 IsNew 就因 ctx 取消中止,第二筆不應被處理")
+	require.Empty(t, notif.notified)
 }
 
 func TestRun_SourceFailureDoesNotBlockOthers(t *testing.T) {
