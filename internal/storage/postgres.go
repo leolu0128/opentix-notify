@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -67,7 +68,11 @@ func nullableRaw(raw []byte) any {
 	return raw
 }
 
-// ListEvents 依標題關鍵字(ILIKE)與來源過濾,新的在前,分頁回傳。
+// likeEscaper 跳脫 LIKE/ILIKE 的萬用字元(% _)與預設跳脫字元(\),
+// 使關鍵字以字面比對而非樣式比對。
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// ListEvents 依標題關鍵字(ILIKE,字面比對)與來源過濾,新的在前,分頁回傳。
 // 不回填 Raw 欄位。
 func (s *PostgresStore) ListEvents(ctx context.Context, q, source string, limit, offset int) ([]model.Event, error) {
 	rows, err := s.db.QueryContext(ctx, `
@@ -76,7 +81,7 @@ func (s *PostgresStore) ListEvents(ctx context.Context, q, source string, limit,
 		WHERE ($1 = '' OR title ILIKE '%' || $1 || '%')
 		  AND ($2 = '' OR source = $2)
 		ORDER BY id DESC
-		LIMIT $3 OFFSET $4`, q, source, limit, offset)
+		LIMIT $3 OFFSET $4`, likeEscaper.Replace(q), source, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list events: %w", err)
 	}
