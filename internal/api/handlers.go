@@ -4,6 +4,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -30,8 +31,11 @@ const (
 
 func (h *handlers) listEvents(c *gin.Context) {
 	limit, err := strconv.Atoi(c.DefaultQuery("limit", strconv.Itoa(defaultLimit)))
-	if err != nil || limit < 1 || limit > maxLimit {
+	switch {
+	case err != nil || limit < 1:
 		limit = defaultLimit
+	case limit > maxLimit:
+		limit = maxLimit
 	}
 	offset, err := strconv.Atoi(c.DefaultQuery("offset", "0"))
 	if err != nil || offset < 0 {
@@ -40,6 +44,7 @@ func (h *handlers) listEvents(c *gin.Context) {
 	events, err := h.store.ListEvents(c.Request.Context(),
 		c.Query("q"), c.Query("source"), limit, offset)
 	if err != nil {
+		slog.Error("list events failed", "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
@@ -61,6 +66,7 @@ func (h *handlers) getEvent(c *gin.Context) {
 		return
 	}
 	if err != nil {
+		slog.Error("get event failed", "id", id, "err", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
