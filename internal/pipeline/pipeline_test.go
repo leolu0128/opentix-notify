@@ -27,10 +27,17 @@ type fakeStore struct {
 	inserted  []model.Event
 	failFirst bool // true = 第一次 InsertEvent 回錯誤,之後恢復正常
 	calls     int
+	// cancelThenFail 非 nil 時,InsertEvent 先取消外部 ctx 再回錯誤,
+	// 模擬「insert 失敗的原因正是 ctx 取消」的情境。
+	cancelThenFail context.CancelFunc
 }
 
 func (f *fakeStore) InsertEvent(ctx context.Context, e model.Event) (bool, error) {
 	f.calls++
+	if f.cancelThenFail != nil {
+		f.cancelThenFail()
+		return false, ctx.Err()
+	}
 	if f.failFirst && f.calls == 1 {
 		return false, errors.New("db down")
 	}
@@ -51,6 +58,8 @@ type fakeDeduper struct {
 	// 用來模擬「dedup 呼叫途中 ctx 被取消」的情境。
 	cancel    context.CancelFunc
 	cancelled bool
+	// forgetCtxErrs 記錄每次 Forget 收到的 ctx 當下的 Err(),驗證 detached ctx 用。
+	forgetCtxErrs []error
 }
 
 func (f *fakeDeduper) IsNew(ctx context.Context, source, id string) (bool, error) {
@@ -71,6 +80,7 @@ func (f *fakeDeduper) IsNew(ctx context.Context, source, id string) (bool, error
 }
 
 func (f *fakeDeduper) Forget(ctx context.Context, source, id string) error {
+	f.forgetCtxErrs = append(f.forgetCtxErrs, ctx.Err())
 	key := source + ":" + id
 	f.forgotten = append(f.forgotten, key)
 	delete(f.seen, key)
@@ -211,6 +221,23 @@ func TestRun_InsertFailureRevertsDedupMark(t *testing.T) {
 	require.Len(t, store.inserted, 1, "後續事件照常處理")
 	require.Equal(t, "2", store.inserted[0].SourceEventID)
 	require.Len(t, notif.notified, 1)
+}
+
+func TestRun_InsertFailureForgetUsesDetachedContext(t *testing.T) {
+	src := &fakeSource{events: []model.Event{{Source: "fake", SourceEventID: "1", Title: "交響音樂會"}}}
+	dedup := &fakeDeduper{seen: map[string]bool{}}
+	notif := &fakeNotifier{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	// insert 失敗的原因正是 ctx 取消:此時 Forget 若沿用同一個 ctx 必然失敗。
+	store := &fakeStore{existing: map[string]bool{}, cancelThenFail: cancel}
+
+	p := newPipeline(src, store, dedup, notif, []string{"交響"}, true)
+	_ = p.Run(ctx)
+	require.Equal(t, []string{"fake:1"}, dedup.forgotten, "insert 失敗仍要撤銷 Redis 標記")
+	require.Len(t, dedup.forgetCtxErrs, 1)
+	require.NoError(t, dedup.forgetCtxErrs[0],
+		"外部 ctx 已取消,Forget 收到的 ctx 仍應是活的(WithoutCancel 生效)")
 }
 
 func TestRun_ContextCancelledStopsRun(t *testing.T) {
