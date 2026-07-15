@@ -116,9 +116,12 @@ func (p *Pipeline) runSource(ctx context.Context, src Source) error {
 			insertErrs++
 			slog.Error("insert failed", "source", e.Source, "event", e.SourceEventID, "err", ierr)
 			// best-effort 撤銷 Redis 標記,讓下一輪能重試這筆;失敗只 log(90 天 TTL 是最終保險)。
-			if ferr := p.Deduper.Forget(ctx, e.Source, e.SourceEventID); ferr != nil {
+			// ctx 可能已取消(這正是 insert 失敗的可能原因),用 detached ctx 確保撤銷能送達。
+			fctx, fcancel := context.WithTimeout(context.WithoutCancel(ctx), 2*time.Second)
+			if ferr := p.Deduper.Forget(fctx, e.Source, e.SourceEventID); ferr != nil {
 				slog.Warn("dedup forget failed", "source", e.Source, "event", e.SourceEventID, "err", ferr)
 			}
+			fcancel()
 			continue
 		}
 		if !inserted {
