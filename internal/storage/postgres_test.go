@@ -90,6 +90,45 @@ func TestListEvents_FilterAndPagination(t *testing.T) {
 	require.Equal(t, "l2", got[0].SourceEventID)
 }
 
+func TestListEvents_EscapesLikeWildcards(t *testing.T) {
+	store := newTestStore(t)
+	ctx := context.Background()
+	for _, e := range []model.Event{
+		{Source: "test", SourceEventID: "w1", Title: "特價50%場", URL: "https://x/w1"},
+		{Source: "test", SourceEventID: "w2", Title: "特價500場", URL: "https://x/w2"},
+		{Source: "test", SourceEventID: "w3", Title: "snake_case工作坊", URL: "https://x/w3"},
+		{Source: "test", SourceEventID: "w4", Title: "snakeXcase工作坊", URL: "https://x/w4"},
+		{Source: "test", SourceEventID: "w5", Title: `反斜線\場`, URL: "https://x/w5"},
+	} {
+		_, err := store.InsertEvent(ctx, e)
+		require.NoError(t, err)
+	}
+
+	// q 內的 % 應為字面字元:"50%" 只命中含字面 "50%" 的 w1,不得萬用匹配 "500"
+	got, err := store.ListEvents(ctx, "50%", "test", 10, 0)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "w1", got[0].SourceEventID)
+
+	// 單獨 "%" 不得等同列出全部,只命中標題含字面 % 的 w1
+	got, err = store.ListEvents(ctx, "%", "test", 10, 0)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "w1", got[0].SourceEventID)
+
+	// q 內的 _ 應為字面字元,不得匹配任意單一字元(w4 的 "X")
+	got, err = store.ListEvents(ctx, "snake_case", "test", 10, 0)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "w3", got[0].SourceEventID)
+
+	// q 以 \ 結尾不得讓查詢靜默回空,應命中含字面 `反斜線\` 的 w5
+	got, err = store.ListEvents(ctx, `反斜線\`, "test", 10, 0)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "w5", got[0].SourceEventID)
+}
+
 func TestGetEvent(t *testing.T) {
 	store := newTestStore(t)
 	ctx := context.Background()
