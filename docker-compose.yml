@@ -10,10 +10,31 @@ services:
       - "15432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gocrawler -d gocrawler"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+  app:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      DATABASE_URL: "postgres://gocrawler:gocrawler@postgres:5432/gocrawler?sslmode=disable"
+      REDIS_ADDR: "redis:6379"
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+    volumes:
+      - ./config.yaml:/config.yaml:ro
+    command: ["serve", "-config", "/config.yaml"]
+    ports:
+      - "8080:8080"
 
 volumes:
   pgdata:
