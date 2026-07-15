@@ -1,6 +1,12 @@
 .git
 .github
+.claude
 docs
 *.md
 config.yaml
 .golangci.yml
+.env
+.env.*
+bin
+dist
+*.exe
